@@ -1,68 +1,60 @@
 <?php
 session_start();
-?>
-<?php
+require __DIR__ . "/components/connection.php";
 
+$errors = [];
+$username = "";
+$password = "";
 
-// $errors=[];
-// $username=$password="";
-$password="";
-$success=false;
-
-$errors = $_SESSION['errors'] ?? [];   // Load errors from session if any
-$username = $_SESSION['old_username'] ?? "";
-unset($_SESSION['errors'], $_SESSION['old_username']); // Clear after showing
-
-
-
-    if($_SERVER["REQUEST_METHOD"]=="POST"){
-        //validating username
-        if(empty($_POST["username"])){
-            $errors["username"]="Username is required";
-        }else{
-            $username=sanitizeInput($_POST["username"]);
-            if(strlen($username)<5){
-                $errors["username"]="username must be 5 character long";
-            }elseif(!preg_match("/^[a-zA-Z0-9._-]+$/",$username)){
-                $errors["username"]="Username can only contain letters, numbers, periods, dashes, or underscores";
-            };
-        }
-
-        //validating password
-        if(empty($_POST["password"])){
-            $errors["password"]="Password is required";
-        }else{
-            $password=sanitizeInput($_POST["password"]);
-            if(strlen($password)<8){
-                $errors["password"]="password must be at least 8 character long";
-            }else if(!preg_match("/[@#$%]/",$password)){
-                $errors["password"]="password must contain at least one special character";
-            }
-        }
-
-        if(empty($errors)){
-            $success=true;
-             $_SESSION["username"]=$username;
-          header("Location:homepage.php");
-          exit();
-        }
-        else {
-        // Store errors + old input in session, then redirect
-        $_SESSION['errors'] = $errors;
-        $_SESSION['old_username'] = $username;
-        header("Location: ".$_SERVER['PHP_SELF']);
-        exit();
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (empty($_POST["username"])) {
+        $errors["username"] = "Username is required";
+    } else {
+        $username = trim($_POST["username"]);
     }
 
+    if (empty($_POST["password"])) {
+        $errors["password"] = "Password is required";
+    } else {
+        $password = $_POST["password"];
+    }
 
-}
-function sanitizeInput($data){
-    $data=trim($data);
-    $data=stripslashes($data);
-    $data=htmlspecialchars($data);
-    return $data;
+    if (empty($errors)) {
+        $stmt = $conn->prepare("SELECT id, username, password, type FROM all_users WHERE username = ?");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $result = $stmt->get_result();
 
+        if ($result->num_rows === 1) {
+            $row = $result->fetch_assoc();
+
+            // ✅ verify password (your sample passwords are not hashed yet)
+            if (password_verify($password, $row["password"]) || $password === $row["password"]) {
+                $_SESSION["username"] = $row["username"];
+                $_SESSION["user_id"] = $row["id"];
+                $_SESSION["type"] = $row["type"];
+
+                // ✅ redirect by type
+                if ($row["type"] === "admin") {
+                    header("Location: dashboard.php");
+                } elseif ($row["type"] === "employee") {
+                    header("Location: employee_dashboard.php");
+                } else {
+                    header("Location: home.php");
+                }
+                exit();
+            } else {
+                $errors["login"] = "Invalid username or password";
+            }
+        } else {
+            $errors["login"] = "Invalid username or password";
+        }
+
+        $stmt->close();
+    }
 }
+
+$conn->close();
 ?>
 
 

@@ -1,92 +1,106 @@
 <?php
 session_start();
-?>
-<?php
 
+$servername = "localhost";
+$dbusername = "root";   // DB username
+$dbpassword = "";       // DB password
+$dbname = "user_db";    // DB name
 
-// $errors=[];
-// $username=$password=$Cpassword=$email="";
-$success=false;
+$conn = new mysqli($servername, $dbusername, $dbpassword, $dbname);
+if ($conn->connect_error) {
+    die("Connection failed: " . $conn->connect_error);
+}
 
-
-// Load errors & old input from session if they exist
+$success = false;
 $errors = $_SESSION['errors'] ?? [];
 $username = $_SESSION['old_username'] ?? "";
 $email = $_SESSION['old_email'] ?? "";
-unset($_SESSION['errors'], $_SESSION['old_username'], $_SESSION['old_email']); // Clear after showing
-$password=$Cpassword="";
+unset($_SESSION['errors'], $_SESSION['old_username'], $_SESSION['old_email']);
+$password = $Cpassword = "";
 
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
+    // ----------- VALIDATIONS ------------
 
-    if($_SERVER["REQUEST_METHOD"]=="POST"){
-        //validating username
-        if(empty($_POST["username"])){
-            $errors["username"]="Username is required";
-        }else{
-            $username=sanitizeInput($_POST["username"]);
-            if(strlen($username)<5){
-                $errors["username"]="username must be 5 character long";
-            }elseif(!preg_match("/^[a-zA-Z0-9._-]+$/",$username)){
-                $errors["username"]="Username can only contain letters, numbers, periods, dashes, or underscores";
-            };
+    // username
+    if (empty($_POST["username"])) {
+        $errors["username"] = "Username is required";
+    } else {
+        $username = sanitizeInput($_POST["username"]);
+        if (strlen($username) < 5) {
+            $errors["username"] = "Username must be at least 5 characters long";
+        } elseif (!preg_match("/^[a-zA-Z0-9._-]+$/", $username)) {
+            $errors["username"] = "Username can only contain letters, numbers, periods, dashes, or underscores";
         }
+    }
 
-        //validating password
-        if(empty($_POST["password"])){
-            $errors["password"]="Password is required";
-        }else{
-            $password=sanitizeInput($_POST["password"]);
-            if(strlen($password)<8){
-                $errors["password"]="password must be at least 8 character long";
-            }else if(!preg_match("/[@#$%]/",$password)){
-                $errors["password"]="password must contain at least one special character";
-            }
+    // password
+    if (empty($_POST["password"])) {
+        $errors["password"] = "Password is required";
+    } else {
+        $password = sanitizeInput($_POST["password"]);
+        if (strlen($password) < 8) {
+            $errors["password"] = "Password must be at least 8 characters long";
+        } elseif (!preg_match("/[@#$%]/", $password)) {
+            $errors["password"] = "Password must contain at least one special character";
         }
+    }
 
-        //confirm password
-        if(empty($_POST["Cpassword"])){
-            $errors["Cpassword"]="Confirm your password";
-        }else{
-            $Cpassword=$_POST["Cpassword"];
-            if($password!==$Cpassword){
-                 $errors["Cpassword"]="password do not match";
-            }
+    // confirm password
+    if (empty($_POST["Cpassword"])) {
+        $errors["Cpassword"] = "Confirm your password";
+    } else {
+        $Cpassword = $_POST["Cpassword"];
+        if ($password !== $Cpassword) {
+            $errors["Cpassword"] = "Passwords do not match";
         }
+    }
 
-          //email
-          if (empty($_POST["email"])) {
+    // email
+    if (empty($_POST["email"])) {
         $errors["email"] = "Email is required";
-         } else {
-            $email = sanitizeInput($_POST["email"]);
-         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-         $errors["email"] = "Invalid email format";
-         }
-             }
+    } else {
+        $email = sanitizeInput($_POST["email"]);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $errors["email"] = "Invalid email format";
+        }
+    }
 
+    // ----------   IF NO ERRORS, INSERT INTO DB ------------
+    if (empty($errors)) {
+        $success = true;
 
-             if(empty($errors)){
-                $success=true;
+        // hash password before storing
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
 
-                //setting session
-                $_SESSION["username"]=$username;
-                header("Location:homepage.php");
-                exit();
-             }else {
-        // store errors & old input into session → redirect back
+        $stmt = $conn->prepare("INSERT INTO users(username, password, email) VALUES (?, ?, ?)");
+        $stmt->bind_param("sss", $username, $hashedPassword, $email);
+
+        if ($stmt->execute()) {
+            $_SESSION["username"] = $username;
+            header("Location: home.php");
+            exit();
+        } else {
+            echo "Database Error: " . $stmt->error;
+        }
+
+        $stmt->close();
+    } else {
+        // store errors & old input
         $_SESSION['errors'] = $errors;
         $_SESSION['old_username'] = $username;
         $_SESSION['old_email'] = $email;
         header("Location: signup.php");
         exit();
     }
+}
 
-    }
-   function sanitizeInput($data){
-        $data=trim($data);
-        $data=stripslashes($data);
-        $data=htmlspecialchars($data);
-        return $data;
-    }
+function sanitizeInput($data) {
+    $data = trim($data);
+    $data = stripslashes($data);
+    $data = htmlspecialchars($data);
+    return $data;
+}
 ?>
 
 
